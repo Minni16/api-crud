@@ -4,9 +4,10 @@ import { Blog } from './blog.entity';
 import { BlogService } from './blog.service';
 import { BlogController } from './blog.controller';
 import { UserModule } from '../user/user.module';
+import { User } from '../user/user.entity'; // imported User entity
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Blog]), UserModule],
+  imports: [TypeOrmModule.forFeature([Blog, User]), UserModule],
   controllers: [BlogController],
   providers: [BlogService],
 })

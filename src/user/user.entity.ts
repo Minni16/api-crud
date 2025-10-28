@@ -1,4 +1,4 @@
-import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, OneToMany, PrimaryGeneratedColumn, ManyToMany } from 'typeorm'; // added manytomany
 import { Blog } from '../blog/blog.entity';
 
 export enum UserRole {
@@ -30,6 +30,10 @@ export class User {
 
   @OneToMany(() => Blog, (blog) => (blog as any).author)
   blogs: Blog[];
+
+  // Many-to-Many relationship with Blog for likes
+  @ManyToMany(() => Blog, (blog) => blog.likedBy)
+  blogsLiked: Blog[];
 }
 
 

@@ -1,4 +1,4 @@
-import { Column, Entity, ManyToOne, PrimaryGeneratedColumn, JoinColumn } from 'typeorm';
+import { Column, Entity, ManyToOne, PrimaryGeneratedColumn, JoinColumn, ManyToMany, JoinTable } from 'typeorm'; // added manytomany, jointable
 import { User } from '../user/user.entity';
 
 export enum BlogStatus {
@@ -26,6 +26,13 @@ export class Blog {
   @ManyToOne(() => User, (user) => user.blogs, { onDelete: 'SET NULL' })
   @JoinColumn({ name: 'authorId' })
   author: User | null;
+
+  // Many-to-Many relationship with User for likes
+  @ManyToMany(() => User, (user) => user.blogsLiked, { cascade: false })
+  @JoinTable({
+    name: 'blog_likes',
+    joinColumn: { name: 'blog_id', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'user_id', referencedColumnName: 'id' },
+  })
+  likedBy: User[];
 }
-
-

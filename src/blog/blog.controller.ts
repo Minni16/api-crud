@@ -5,7 +5,7 @@ import { CreateBlogDto } from './dto/create-blog.dto';
 import { UpdateBlogDto } from './dto/update-blog.dto';
 import { UserService } from '../user/user.service';
 
-// baset route for blogs
+// base route for blogs
 @Controller('blogs')
 export class BlogController {
   constructor(private readonly blogService: BlogService, private readonly userService: UserService) {}
@@ -16,15 +16,17 @@ export class BlogController {
   }
 
   @Get()
-  async findAll(@Query('userId') userId: string): Promise<Blog[]> {
+  async findAll(@Query('userId') userId: string): Promise<any[]> {
     const user = await this.userService.findById(userId);
-    return this.blogService.findAllForUser(user);
-  }
+    const blogs = await this.blogService.findAllForUser(user);
+    return blogs.map((b) => ({ ...b, likesCount: (b.likedBy || []).length, likedBy: b.likedBy }));
+  } // all blogs xuttai banaune, if no userid is given
 
   @Get('active')
-  async findActive(@Query('userId') userId: string): Promise<Blog[]> {
+  async findActive(@Query('userId') userId: string): Promise<any[]> {
     const user = await this.userService.findById(userId);
-    return this.blogService.findActiveForUser(user);
+    const blogs = await this.blogService.findActiveForUser(user);
+    return blogs.map((b) => ({ ...b, likesCount: (b.likedBy || []).length, likedBy: b.likedBy }));
   }
 
   @Put(':id')
@@ -35,6 +37,18 @@ export class BlogController {
   @Delete(':id')
   remove(@Param('id') id: string): Promise<void> {
     return this.blogService.remove(id);
+  }
+
+  @Post(':id/like')
+  async like(@Param('id') id: string, @Query('userId') userId: string): Promise<any> {
+    const blog = await this.blogService.like(id, userId);
+    return { ...blog, likesCount: (blog.likedBy || []).length, likedBy: blog.likedBy };
+  }
+
+  @Delete(':id/like')
+  async unlike(@Param('id') id: string, @Query('userId') userId: string): Promise<any> {
+    const blog = await this.blogService.unlike(id, userId);
+    return { ...blog, likesCount: (blog.likedBy || []).length, likedBy: blog.likedBy };
   }
 }
 

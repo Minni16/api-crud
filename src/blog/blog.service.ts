@@ -10,42 +10,133 @@ import { UpdateBlogDto } from './dto/update-blog.dto';
 export class BlogService {
   constructor(
     @InjectRepository(Blog) private readonly blogRepository: Repository<Blog>,
+    @InjectRepository(User) private readonly userRepository: Repository<User>,
   ) {}
 
   async create(createDto: CreateBlogDto): Promise<Blog> {
     const status = createDto.status ?? BlogStatus.ACTIVE;
-    const blog = this.blogRepository.create({ ...createDto, status, authorId: createDto.authorId });
-    return await this.blogRepository.save(blog);
+    const result = await this.blogRepository
+      .createQueryBuilder()
+      .insert()
+      .into(Blog)
+      .values([{ ...createDto, status, authorId: createDto.authorId }])
+      .returning('*') // returns full row
+      .execute();
+    return result.raw[0] as Blog; // vakkhar insert gareko dekhauxa
   }
 
   async findAllForUser(user: User): Promise<Blog[]> {
-    if (user.role === UserRole.ADMIN) {
-      return await this.blogRepository.find({ order: { title: 'ASC' } });
+    const qb = this.blogRepository
+      .createQueryBuilder('b')
+      .leftJoinAndSelect('b.likedBy', 'likedBy')
+      .leftJoinAndSelect('b.author', 'author')
+      .orderBy('b.title', 'ASC');
+
+    if (user.role !== UserRole.ADMIN) {
+      qb.where('b.authorId = :authorId', { authorId: user.id });
     }
-    return await this.blogRepository.find({ where: { authorId: user.id }, order: { title: 'ASC' } });
-  }
+
+    return await qb.getMany();
+  } // blog list
 
   async findActiveForUser(user: User): Promise<Blog[]> {
-    if (user.role === UserRole.ADMIN) {
-      return await this.blogRepository.find({ where: { status: BlogStatus.ACTIVE }, order: { title: 'ASC' } });
+    const qb = this.blogRepository
+      .createQueryBuilder('b')
+      .leftJoinAndSelect('b.likedBy', 'likedBy')
+      .leftJoinAndSelect('b.author', 'author')
+      .where('b.status = :status', { status: BlogStatus.ACTIVE })
+      .orderBy('b.title', 'ASC');
+
+    if (user.role !== UserRole.ADMIN) {
+      qb.andWhere('b.authorId = :authorId', { authorId: user.id });
     }
-    return await this.blogRepository.find({ where: { status: BlogStatus.ACTIVE, authorId: user.id }, order: { title: 'ASC' } });
+
+    return await qb.getMany();
   }
 
   async update(id: string, updateDto: UpdateBlogDto): Promise<Blog> {
-    const blog = await this.blogRepository.findOne({ where: { id } });
-    if (!blog) {
-      throw new NotFoundException('Blog not found');
-    }
-    
-    Object.assign(blog, updateDto);
-    return await this.blogRepository.save(blog);
-  }
+    const result = await this.blogRepository
+      .createQueryBuilder()
+      .update(Blog)
+      .set({ ...updateDto })
+      .where('id = :id', { id })
+      .returning('*')
+      .execute();
 
-  async remove(id: string): Promise<void> {
-    const result = await this.blogRepository.delete({ id });
     if (!result.affected) {
       throw new NotFoundException('Blog not found');
     }
+
+    return result.raw[0] as Blog;
+  }
+
+  async remove(id: string): Promise<void> {
+    const res = await this.blogRepository
+      .createQueryBuilder()
+      .delete()
+      .from(Blog)
+      .where('id = :id', { id })
+      .execute();
+    if (!res.affected) {
+      throw new NotFoundException('Blog not found');
+    }
+  }
+
+  async like(blogId: string, userId: string): Promise<Blog> {
+    const blogExists = await this.blogRepository
+      .createQueryBuilder('b')
+      .where('b.id = :id', { id: blogId })
+      .getExists();
+    if (!blogExists) throw new NotFoundException('Blog not found');
+
+    const userExists = await this.userRepository
+      .createQueryBuilder('u')
+      .where('u.id = :id', { id: userId })
+      .getExists();
+    if (!userExists) throw new NotFoundException('User not found');
+
+    await this.blogRepository
+      .createQueryBuilder()
+      .relation(Blog, 'likedBy')
+      .of(blogId)
+      .add(userId);
+
+    const updated = await this.blogRepository
+      .createQueryBuilder('b')
+      .leftJoinAndSelect('b.likedBy', 'likedBy')
+      .leftJoinAndSelect('b.author', 'author')
+      .where('b.id = :id', { id: blogId })
+      .getOne();
+    if (!updated) throw new NotFoundException('Blog not found');
+    return updated;
+  }
+
+  async unlike(blogId: string, userId: string): Promise<Blog> {
+    const blogExists = await this.blogRepository
+      .createQueryBuilder('b')
+      .where('b.id = :id', { id: blogId })
+      .getExists();
+    if (!blogExists) throw new NotFoundException('Blog not found');
+
+    const userExists = await this.userRepository
+      .createQueryBuilder('u')
+      .where('u.id = :id', { id: userId })
+      .getExists();
+    if (!userExists) throw new NotFoundException('User not found');
+
+    await this.blogRepository
+      .createQueryBuilder()
+      .relation(Blog, 'likedBy')
+      .of(blogId)
+      .remove(userId);
+
+    const updated = await this.blogRepository
+      .createQueryBuilder('b')
+      .leftJoinAndSelect('b.likedBy', 'likedBy')
+      .leftJoinAndSelect('b.author', 'author')
+      .where('b.id = :id', { id: blogId })
+      .getOne();
+    if (!updated) throw new NotFoundException('Blog not found');
+    return updated;
   }
 }
